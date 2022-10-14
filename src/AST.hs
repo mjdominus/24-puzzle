@@ -2,24 +2,34 @@ module AST where
     
 import Data.List (intercalate)
 
-data Operator a = Operator { opName :: String, opFunc :: a -> a -> a }
+data Operator = PLUS | MINUS | TIMES | DIVIDE 
+    deriving (Eq, Show)
 
-opPlus :: Num a => Operator a
-opPlus = Operator { opName="+", opFunc=(+) }
+applyOp :: Fractional a => Operator -> a -> a -> a
+applyOp PLUS = (+)
+applyOp MINUS = (-)
+applyOp TIMES = (*)
+applyOp DIVIDE = (/)
 
+opName :: Operator -> String
+opName PLUS = "+"
+opName MINUS = "-"
+opName TIMES = "×"
+opName DIVIDE = "÷"
 
-instance Show (Operator a) where
-    show (Operator {opName=n}) = "Op(" ++ n ++ ")"
-
-instance Eq (Operator a) where
-    o1 == o2   = opName o1 == opName o2
-
-data (Num a, Show a) => AST a = Con a | Op (Operator a) (AST a) (AST a)
+data (Eq a, Show a) => AST a = Con a | Op Operator (AST a) (AST a)
   deriving (Eq, Show)
 
-pprint :: (Num a, Show a) => AST a -> String
+pprint :: (Eq a, Show a) => AST a -> String
 pprint (Con a) = show a
 pprint (Op op lt rt) = intercalate " " ["(", pprint lt, opName op, pprint rt, ")"]
 
+instance (Num a, Show a, Eq a) => Num (AST a) where
+    (+) = Op PLUS
+    (-) = Op MINUS
+    (*) = Op TIMES
+    fromInteger = Con . fromInteger
+    abs = error "abs(AST) not defined"
+    signum = error "signum(AST) not defined"
 
 
