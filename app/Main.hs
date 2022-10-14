@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Lib
+import AST()
 
 main :: IO ()
-main = someFunc
+main = return ()
