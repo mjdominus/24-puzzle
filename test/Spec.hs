@@ -1,17 +1,17 @@
 
 import Test.Tasty
 import Test.Tasty.HUnit
-import AST (pprint, AST(..), Operator(..))
+import AST (pprint, AST(..), Operator(..), evalAST)
 
 main :: IO ()
 main = defaultMain tests
 
 
 tests :: TestTree
-tests =  testGroup "all" [ showTests, builder ]
+tests =  testGroup "all" [ showTests, builder, eval ]
 
 showTests :: TestTree
-showTests = testGroup "show" $ do
+showTests = testGroup "pprint" $ do
     (ast, x) <- [
         (Con 3, "3"),
         (Op PLUS (Con 2) (Con 2), "( 2 + 2 )"),
