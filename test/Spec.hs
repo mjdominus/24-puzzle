@@ -1,5 +1,6 @@
 import Test.Tasty
 import qualified TestAST (tests)
+import qualified TestEzpr (tests)
 
 main :: IO ()
-main = defaultMain TestAST.tests
+main = defaultMain $ testGroup "." [TestAST.tests, TestEzpr.tests]
