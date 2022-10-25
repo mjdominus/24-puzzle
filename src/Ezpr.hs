@@ -3,51 +3,55 @@
 
 module Ezpr () where
 
-import Data.List (intercalate)
+import Data.List (intercalate, partition)
 import Data.Maybe (fromJust, isJust)
-import Data.MultiSet (MultiSet)
-import Data.MultiSet qualified as MS
-
-class Insertable f where
-  insert :: a -> f a -> f a
-
--- create multiset version of list operator
-
-ms :: ([a] -> c) -> MultiSet a -> c
-ms f = MS.fromList . f . MS.toList
 
 data Ezpr a
   = Con a
-  | Sum (MultiSet (Ezpr a)) (MultiSet (Ezpr a))
-  | Mul (MultiSet (Ezpr a)) (MultiSet (Ezpr a))
+  | Add [Ezpr a] [Ezpr a]
+  | Mul [Ezpr a] [Ezpr a]
   deriving (Show)
 
-decomposeSum :: Ezpr a -> Maybe (MultiSet (Ezpr a), MultiSet (Ezpr a))
-decomposeSum (Sum ad sb) = Just (ad, sb)
-decomposeSum (Mul _ _) = Nothing
-decomposeSum (Con _) = Nothing
+type Bag a = [Ezpr a]
+type Bags a = (Bag a, Bag a)
 
-decomposeSum' :: Ezpr a -> (MultiSet (Ezpr a), MultiSet (Ezpr a))
-decomposeSum' = fromJust . decomposeSum
+leftBag :: Ezpr a -> Bag a
+leftBag = fst . decompose
 
-decomposeMul :: Ezpr a -> Maybe (MultiSet (Ezpr a), MultiSet (Ezpr a))
-decomposeMul (Sum _ _) = Nothing
+rightBag :: Ezpr a -> Bag a
+rightBag = snd . decompose
+
+decompose :: Show (Ezpr a) => Ezpr a -> Bags a
+decompose (Add a b) = (a, b)
+decompose (Mul a b) = (a, b)
+decompose x = error $ "Can't decompose Ezpr " ++ show x
+
+decomposeAdd :: Ezpr a -> Maybe (Bags a)
+decomposeAdd (Add ad sb) = Just (ad, sb)
+decomposeAdd (Mul _ _) = Nothing
+decomposeAdd (Con _) = Nothing
+
+decomposeAdd' :: Ezpr a -> Bags a
+decomposeAdd' = fromJust . decomposeAdd
+
+decomposeMul :: Ezpr a -> Maybe (Bags a)
+decomposeMul (Add _ _) = Nothing
 decomposeMul (Mul nm dn) = Just (nm, dn)
 decomposeMul (Con _) = Nothing
 
-decomposeMul' :: Ezpr a -> (MultiSet (Ezpr a), MultiSet (Ezpr a))
+decomposeMul' :: Ezpr a -> Bags a
 decomposeMul' = fromJust . decomposeMul
 
-isSum :: Ezpr a -> Bool
-added :: Ezpr a -> MultiSet (Ezpr a)
-subtracted :: Ezpr a -> MultiSet (Ezpr a)
-isSum = isJust . decomposeSum
-added = fst . fromJust . decomposeSum
-subtracted = snd . fromJust . decomposeSum
+isAdd :: Ezpr a -> Bool
+added :: Ezpr a -> Bag a
+subtracted :: Ezpr a -> Bag a
+isAdd = isJust . decomposeAdd
+added = fst . fromJust . decomposeAdd
+subtracted = snd . fromJust . decomposeAdd
 
 isMul :: Ezpr a -> Bool
-numerators :: Ezpr a -> MultiSet (Ezpr a)
-denominators :: Ezpr a -> MultiSet (Ezpr a)
+numerators :: Ezpr a -> Bag a
+denominators :: Ezpr a -> Bag a
 isMul = isJust . decomposeMul
 numerators = fst . fromJust . decomposeMul
 denominators = snd . fromJust . decomposeMul
@@ -55,39 +59,68 @@ denominators = snd . fromJust . decomposeMul
 toStr :: Show a => Ezpr a -> String
 toStr = \case
   Con a -> show a
-  Sum lt rt -> compound "SUM" lt "-" rt
+  Add lt rt -> compound "ADD" lt "-" rt
   Mul lt rt -> compound "MUL" lt "÷" rt
  where
   compound op lt sep rt =
     intercalate " " [op, "[", lts, sep, rts, "]"]
    where
-    lts = intercalate ", " $ map toStr $ MS.toList lt
-    rts = intercalate ", " $ map toStr $ MS.toList rt
-
--- given a predicate p and a collection X,
--- compute two lists, one containing the elements of x
--- for which p is true, the other for which it is false
-splitP :: (Foldable f) => (a -> Bool) -> f a -> ([a], [a])
-splitP p = foldr f ([], [])
- where
-  f x (yes, no) =
-    if p x
-      then (x : yes, no)
-      else (yes, x : no)
+    lts = intercalate " " $ map toStr lt
+    rts = intercalate " " $ map toStr rt
 
 -- take a SUM [b - c] SUM[d - e] and produce SUM [a b d - c e]
-
-liftSums :: Ezpr a -> Ezpr a
-liftSums (Sum lt rt) =
-  Sum lts rts
+liftSumsOld :: Ezpr a -> Ezpr a
+liftSumsOld (Add lt rt) =
+  Add lts rts
  where
-  lts = leftLeft <> rightRight <> nonSumsFromLeft
-  rts = leftRight <> rightLeft <> nonSumsFromRight
-  (sumsFromLeft, nonSumsFromLeft) = MS.partition isSum lt
-  (leftLeft, leftRight) = unzip $ (fmap decomposeSum' sumsFromLeft :: _)
-liftSums x = x
+  lts = nonAddsFromLeft <> concat leftLeft <> concat rightRight
+  rts = nonAddsFromRight <> concat leftRight <> concat rightLeft
+  (addsFromLeft, nonAddsFromLeft) = partition isAdd lt
+  (addsFromRight, nonAddsFromRight) = partition isAdd rt
+  (leftLeft, leftRight) = unzip $ fmap decomposeAdd' addsFromLeft
+  (rightLeft, rightRight) = unzip $ fmap decomposeAdd' addsFromRight
+liftSumsOld x = x
 
--- SUM $ MultiSet(1, 1, SUM(MultiSet(2, 3)]) ->  SUM (MultiSet (1 1 2 3))
+-- liftNodes :: Ezpr a -> Ezpr a
+liftNodes ::
+  (Ezpr a -> Bool) ->
+  ([Ezpr a] -> [Ezpr a] -> t) ->
+  (Ezpr a -> ([Ezpr a], [Ezpr a])) ->
+  Ezpr a ->
+  t
+liftNodes nodeType constructor destructor node =
+  constructor lts rts
+ where
+  lts = nonAddsFromLeft <> concat leftLeft <> concat rightRight
+  rts = nonAddsFromRight <> concat leftRight <> concat rightLeft
+  (addsFromLeft, nonAddsFromLeft) = partition nodeType (leftBag node)
+  (addsFromRight, nonAddsFromRight) = partition nodeType (rightBag node)
+  (leftLeft, leftRight) = unzip $ fmap destructor addsFromLeft
+  (rightLeft, rightRight) = unzip $ fmap destructor addsFromRight
+
+liftAdds :: Ezpr a -> Ezpr a
+liftAdds = liftNodes isAdd Add decomposeAdd'
+
+liftMuls :: Ezpr a -> Ezpr a
+liftMuls = liftNodes isMul Mul decomposeMul'
+
+example :: Num a => Ezpr a
+example =
+  Add
+    [Add [Con 3] [Con 4]]
+    [Add [Con 5] [Con 6]]
+
+example2 :: Num a => Ezpr a
+example2 =
+  Add
+    [Con 1, Add [Con 2] [Con 3]]
+    [Con 4, Add [Con 5] [Con 6]]
+
+example3 :: Num a => Ezpr a
+example3 =
+  Mul
+    [Add [Con 3] [Con 4]]
+    [Mul [Con 5] [Con 6]]
 
 {-
 liftNodes :: Ezpr a -> Ezpr a
