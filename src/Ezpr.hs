@@ -67,9 +67,9 @@ flattenOperatorNode (Oper o (lt, rt)) =
 flattenOperatorNode c@(Con _) = c
 
 instance (Eq a, Num a) => Num (Ezpr a) where
-  (+) = arithLeft SUM
-  (-) = arithRight SUM
-  (*) = arithLeft MUL
+  (+) = addEzprs
+  (-) = subEzprs
+  (*) = mulEzprs
 
   negate (Con c) = Con (negate c)
   negate (Oper SUM (lt, rt)) = Oper SUM (rt, lt)
@@ -81,7 +81,7 @@ instance (Eq a, Num a) => Num (Ezpr a) where
   fromInteger = Con . fromInteger
 
 instance (Eq a, Fractional a) => Fractional (Ezpr a) where
-  (/) = arithRight MUL
+  (/) = divEzprs
   fromRational = Con . fromRational
 
 arithLeft :: (Eq a, Num a) => Op -> Ezpr a -> Ezpr a -> Ezpr a
