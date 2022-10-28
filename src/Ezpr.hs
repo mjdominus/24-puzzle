@@ -108,23 +108,26 @@ arithRight o (Oper o1 (lt1, rt1)) e2 | o == o1 = Oper o (lt1, e2 : rt1)
 arithRight o e1 (Oper o2 (lt2, rt2)) | o == o2 = negate $ arithRight o (Oper o2 (lt2, rt2)) e1
 arithRight o e1 e2 = Oper o ([e1], [e2])
 
+mkOper :: Eq a => Op -> ([Ezpr a], [Ezpr a]) -> Ezpr a
+mkOper op = Oper op . removeDups
+
 addEzprs :: (Eq a, Num a) => Ezpr a -> Ezpr a -> Ezpr a
 addEzprs e (Con 0) = e
 addEzprs (Con 0) e = e
 Oper SUM (lt1, rt1) `addEzprs` Oper SUM (lt2, rt2) =
-  Oper SUM (lt1 ++ lt2, rt1 ++ rt2)
-Oper SUM (lt1, rt1) `addEzprs` e2 = Oper SUM (e2 : lt1, rt1)
-e1 `addEzprs` Oper SUM (lt2, rt2) = Oper SUM (e1 : lt2, rt2)
-e1 `addEzprs` e2 = Oper SUM ([e1, e2], [])
+  mkOper SUM (lt1 ++ lt2, rt1 ++ rt2)
+Oper SUM (lt1, rt1) `addEzprs` e2 = mkOper SUM (e2 : lt1, rt1)
+e1 `addEzprs` Oper SUM (lt2, rt2) = mkOper SUM (e1 : lt2, rt2)
+e1 `addEzprs` e2 = mkOper SUM ([e1, e2], [])
 
 subEzprs :: (Eq a, Num a) => Ezpr a -> Ezpr a -> Ezpr a
 subEzprs e (Con 0) = e
 subEzprs (Con 0) e = negate e
 Oper SUM (lt1, rt1) `subEzprs` Oper SUM (lt2, rt2) =
-  Oper SUM (lt1 ++ rt2, rt1 ++ lt2)
-Oper SUM (lt1, rt1) `subEzprs` e2 = Oper SUM (lt1, e2 : rt1)
-e1 `subEzprs` Oper SUM (lt2, rt2) = Oper SUM (lt2, e1 : rt2)
-e1 `subEzprs` e2 = Oper SUM ([e1], [e2])
+  mkOper SUM (lt1 ++ rt2, rt1 ++ lt2)
+Oper SUM (lt1, rt1) `subEzprs` e2 = mkOper SUM (lt1, e2 : rt1)
+e1 `subEzprs` Oper SUM (lt2, rt2) = mkOper SUM (lt2, e1 : rt2)
+e1 `subEzprs` e2 = mkOper SUM ([e1], [e2])
 
 mulEzprs :: (Eq a, Num a) => Ezpr a -> Ezpr a -> Ezpr a
 mulEzprs (Con 0) _ = Con 0
@@ -134,19 +137,19 @@ mulEzprs e (Con 1) = e
 mulEzprs (Con (-1)) e = negate e
 mulEzprs e (Con (-1)) = negate e
 Oper MUL (lt1, rt1) `mulEzprs` Oper MUL (lt2, rt2) =
-  Oper MUL (lt1 ++ lt2, rt1 ++ rt2)
-Oper MUL (lt1, rt1) `mulEzprs` e2 = Oper MUL (e2 : lt1, rt1)
-e1 `mulEzprs` Oper MUL (lt2, rt2) = Oper MUL (e1 : lt2, rt2)
-e1 `mulEzprs` e2 = Oper MUL ([e1, e2], [])
+  mkOper MUL (lt1 ++ lt2, rt1 ++ rt2)
+Oper MUL (lt1, rt1) `mulEzprs` e2 = mkOper MUL (e2 : lt1, rt1)
+e1 `mulEzprs` Oper MUL (lt2, rt2) = mkOper MUL (e1 : lt2, rt2)
+e1 `mulEzprs` e2 = mkOper MUL ([e1, e2], [])
 
 divEzprs :: (Eq a, Num a) => Ezpr a -> Ezpr a -> Ezpr a
 divEzprs e (Con 1) = e
 divEzprs e (Con (-1)) = negate e
 Oper MUL (lt1, rt1) `divEzprs` Oper MUL (lt2, rt2) =
-  Oper MUL (lt1 ++ lt2, rt1 ++ rt2)
-Oper MUL (lt1, rt1) `divEzprs` e2 = Oper MUL (e2 : lt1, rt1)
-e1 `divEzprs` Oper MUL (lt2, rt2) = Oper MUL (e1 : lt2, rt2)
-e1 `divEzprs` e2 = Oper MUL ([e1, e2], [])
+  mkOper MUL (lt1 ++ lt2, rt1 ++ rt2)
+Oper MUL (lt1, rt1) `divEzprs` e2 = mkOper MUL (e2 : lt1, rt1)
+e1 `divEzprs` Oper MUL (lt2, rt2) = mkOper MUL (e1 : lt2, rt2)
+e1 `divEzprs` e2 = mkOper MUL ([e1, e2], [])
 
 example :: (Eq a, Num a) => Ezpr a
 example = (3 + 4) + (5 + 6)
