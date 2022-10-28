@@ -1,6 +1,7 @@
 module Expr (Expr (..), Op (..), evalExpr, mkCon, toStr) where
 
 import Data.List (intercalate)
+import Data.Ratio (denominator, numerator)
 
 data Op = P | M | T | D
     deriving (Eq, Show)
@@ -33,7 +34,11 @@ instance Num a => Num (Expr a) where
 
 instance Num a => Fractional (Expr a) where
     (/) = Expr D
-    fromRational = undefined
+    fromRational r = Expr D (intCon n) (intCon d)
+      where
+        intCon = XCon . fromInteger
+        n = numerator r
+        d = denominator r
 
 -- can I use this for ExprToEzpr?
 evalExpr :: (Real a, Fractional b) => Expr a -> b
