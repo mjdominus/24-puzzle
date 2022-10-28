@@ -78,6 +78,18 @@ instance (Eq a, Fractional a) => Fractional (Ezpr a) where
   (/) = divEzprs
   fromRational = Con . fromRational
 
+-- if the two bags (a, b) have any elements in common,
+-- remove the common elements from both
+-- for example ([1,2,3,4], [2, 4, 4, 6]) -> ([1,3], [4,6])
+removeDups :: Eq a => ([a], [a]) -> ([a], [a])
+removeDups ([], b2) = ([], b2)
+removeDups ((b : bs), b2) =
+  if elem b b2
+    then removeDups (bs, (delete b b2))
+    else putback b $ removeDups (bs, b2)
+ where
+  putback b (b1, b2) = (b : b1, b2)
+
 arithLeft :: (Eq a, Num a) => Op -> Ezpr a -> Ezpr a -> Ezpr a
 arithLeft o (Oper o1 (lt1, rt1)) (Oper o2 (lt2, rt2))
   | o == o1
