@@ -4,7 +4,7 @@
 module Ezpr (Ezpr (..), toStr) where
 
 import Data.List (delete, intercalate, partition)
-import Data.Maybe (fromJust, isJust)
+import GHC.Real (Ratio ((:%)))
 
 data Op = SUM | MUL deriving (Eq, Show)
 
@@ -76,7 +76,7 @@ instance (Eq a, Num a) => Num (Ezpr a) where
 
 instance (Eq a, Real a) => Fractional (Ezpr a) where
   (/) = divEzprs
-  fromRational = undefined
+  fromRational (a :% b) = mkOper MUL ([Con $ fromInteger a], [Con $ fromInteger b])
 
 -- if the two bags (a, b) have any elements in common,
 -- remove the common elements from both
