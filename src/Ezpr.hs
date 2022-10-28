@@ -53,18 +53,12 @@ toStr = \case
     lts = intercalate " " $ map toStr lt
     rts = intercalate " " $ map toStr rt
 
--- take SUM [ a SUM [b - c] SUM [d - e] ] and produce SUM [a b d - c e]
-flattenOperatorNode :: Ezpr a -> Ezpr a
-flattenOperatorNode (Oper o (lt, rt)) =
-  Oper o (lts, rts)
- where
-  lts = mismatchedNodesFromLeft <> concat leftLeft <> concat rightRight
-  rts = mismatchedNodesFromRight <> concat leftRight <> concat rightLeft
-  (matchingNodesFromLeft, mismatchedNodesFromLeft) = partition (isOp o) lt
-  (matchingNodesFromRight, mismatchedNodesFromRight) = partition (isOp o) rt
-  (leftLeft, leftRight) = unzip $ fmap decompose matchingNodesFromLeft
-  (rightLeft, rightRight) = unzip $ fmap decompose matchingNodesFromRight
-flattenOperatorNode c@(Con _) = c
+instance Eq a => Eq (Ezpr a) where
+  (==) (Con a) (Con b) = a == b
+  (==) (Con _) _ = False
+  (==) _ (Con _) = False
+  (==) (Oper o1 (lt1, rt1)) (Oper o2 (lt2, rt2)) =
+    o1 == o2 && lt1 `equalAsBags` lt2 && rt1 `equalAsBags` rt2
 
 instance (Eq a, Num a) => Num (Ezpr a) where
   (+) = addEzprs
