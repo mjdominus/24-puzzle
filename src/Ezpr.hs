@@ -1,7 +1,7 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Ezpr () where
+module Ezpr (Ezpr (..), toStr) where
 
 import Data.List (delete, intercalate, partition)
 import Data.Maybe (fromJust, isJust)

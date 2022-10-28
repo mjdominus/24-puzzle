@@ -1,4 +1,4 @@
-module Expr (Expr (..)) where
+module Expr (Expr (..), Op (..)) where
 
 data Op = P | M | T | D
 
