@@ -3,17 +3,29 @@
 
 module Ezpr () where
 
-import Data.List (intercalate, partition)
+import Data.List (delete, intercalate, partition)
 import Data.Maybe (fromJust, isJust)
+
+data Op = SUM | MUL deriving (Eq, Show)
 
 data Ezpr a
   = Con a
-  | Add [Ezpr a] [Ezpr a]
-  | Mul [Ezpr a] [Ezpr a]
+  | Oper Op (Bags a)
   deriving (Show)
+
+-- Pattern guard
+isOp :: Op -> Ezpr a -> Bool
+isOp o = \case
+  (Oper o' _) | o == o' -> True
+  _ -> False
 
 type Bag a = [Ezpr a]
 type Bags a = (Bag a, Bag a)
+
+equalAsBags :: Eq a => [a] -> [a] -> Bool
+equalAsBags [] [] = True
+equalAsBags [] _ = False
+equalAsBags (a : as) bs = elem a bs && equalAsBags as (delete a bs)
 
 leftBag :: Ezpr a -> Bag a
 leftBag = fst . decompose
@@ -21,106 +33,126 @@ leftBag = fst . decompose
 rightBag :: Ezpr a -> Bag a
 rightBag = snd . decompose
 
-decompose :: Show (Ezpr a) => Ezpr a -> Bags a
-decompose (Add a b) = (a, b)
-decompose (Mul a b) = (a, b)
-decompose x = error $ "Can't decompose Ezpr " ++ show x
+decompose :: Ezpr a -> Bags a
+decompose (Oper _ bags) = bags
+-- maybe use ifcxt here : https://hackage.haskell.org/package/ifcxt
+decompose _ = error $ "Can't decompose Ezpr "
 
-decomposeAdd :: Ezpr a -> Maybe (Bags a)
-decomposeAdd (Add ad sb) = Just (ad, sb)
-decomposeAdd (Mul _ _) = Nothing
-decomposeAdd (Con _) = Nothing
-
-decomposeAdd' :: Ezpr a -> Bags a
-decomposeAdd' = fromJust . decomposeAdd
-
-decomposeMul :: Ezpr a -> Maybe (Bags a)
-decomposeMul (Add _ _) = Nothing
-decomposeMul (Mul nm dn) = Just (nm, dn)
-decomposeMul (Con _) = Nothing
-
-decomposeMul' :: Ezpr a -> Bags a
-decomposeMul' = fromJust . decomposeMul
-
-isAdd :: Ezpr a -> Bool
-added :: Ezpr a -> Bag a
-subtracted :: Ezpr a -> Bag a
-isAdd = isJust . decomposeAdd
-added = fst . fromJust . decomposeAdd
-subtracted = snd . fromJust . decomposeAdd
-
-isMul :: Ezpr a -> Bool
-numerators :: Ezpr a -> Bag a
-denominators :: Ezpr a -> Bag a
-isMul = isJust . decomposeMul
-numerators = fst . fromJust . decomposeMul
-denominators = snd . fromJust . decomposeMul
+separatorFor :: Op -> String
+separatorFor SUM = "-"
+separatorFor MUL = "÷"
 
 toStr :: Show a => Ezpr a -> String
 toStr = \case
   Con a -> show a
-  Add lt rt -> compound "ADD" lt "-" rt
-  Mul lt rt -> compound "MUL" lt "÷" rt
+  Oper o (lt, rt) -> compound o lt (separatorFor o) rt
  where
   compound op lt sep rt =
-    intercalate " " [op, "[", lts, sep, rts, "]"]
+    intercalate " " [show op, "[", lts, sep, rts, "]"]
    where
     lts = intercalate " " $ map toStr lt
     rts = intercalate " " $ map toStr rt
 
--- take a SUM [b - c] SUM[d - e] and produce SUM [a b d - c e]
-liftSumsOld :: Ezpr a -> Ezpr a
-liftSumsOld (Add lt rt) =
-  Add lts rts
+-- take SUM [ a SUM [b - c] SUM [d - e] ] and produce SUM [a b d - c e]
+flattenOperatorNode :: Ezpr a -> Ezpr a
+flattenOperatorNode (Oper o (lt, rt)) =
+  Oper o (lts, rts)
  where
-  lts = nonAddsFromLeft <> concat leftLeft <> concat rightRight
-  rts = nonAddsFromRight <> concat leftRight <> concat rightLeft
-  (addsFromLeft, nonAddsFromLeft) = partition isAdd lt
-  (addsFromRight, nonAddsFromRight) = partition isAdd rt
-  (leftLeft, leftRight) = unzip $ fmap decomposeAdd' addsFromLeft
-  (rightLeft, rightRight) = unzip $ fmap decomposeAdd' addsFromRight
-liftSumsOld x = x
+  lts = mismatchedNodesFromLeft <> concat leftLeft <> concat rightRight
+  rts = mismatchedNodesFromRight <> concat leftRight <> concat rightLeft
+  (matchingNodesFromLeft, mismatchedNodesFromLeft) = partition (isOp o) lt
+  (matchingNodesFromRight, mismatchedNodesFromRight) = partition (isOp o) rt
+  (leftLeft, leftRight) = unzip $ fmap decompose matchingNodesFromLeft
+  (rightLeft, rightRight) = unzip $ fmap decompose matchingNodesFromRight
+flattenOperatorNode c@(Con _) = c
 
--- liftNodes :: Ezpr a -> Ezpr a
-liftNodes ::
-  (Ezpr a -> Bool) ->
-  ([Ezpr a] -> [Ezpr a] -> t) ->
-  (Ezpr a -> ([Ezpr a], [Ezpr a])) ->
-  Ezpr a ->
-  t
-liftNodes nodeType constructor destructor node =
-  constructor lts rts
- where
-  lts = nonAddsFromLeft <> concat leftLeft <> concat rightRight
-  rts = nonAddsFromRight <> concat leftRight <> concat rightLeft
-  (addsFromLeft, nonAddsFromLeft) = partition nodeType (leftBag node)
-  (addsFromRight, nonAddsFromRight) = partition nodeType (rightBag node)
-  (leftLeft, leftRight) = unzip $ fmap destructor addsFromLeft
-  (rightLeft, rightRight) = unzip $ fmap destructor addsFromRight
+instance (Eq a, Num a) => Num (Ezpr a) where
+  (+) = arithLeft SUM
+  (-) = arithRight SUM
+  (*) = arithLeft MUL
 
-liftAdds :: Ezpr a -> Ezpr a
-liftAdds = liftNodes isAdd Add decomposeAdd'
+  negate (Con c) = Con (negate c)
+  negate (Oper SUM (lt, rt)) = Oper SUM (rt, lt)
+  negate x = Oper SUM ([], [x])
 
-liftMuls :: Ezpr a -> Ezpr a
-liftMuls = liftNodes isMul Mul decomposeMul'
+  signum = undefined
+  abs = undefined
 
-example :: Num a => Ezpr a
-example =
-  Add
-    [Add [Con 3] [Con 4]]
-    [Add [Con 5] [Con 6]]
+  fromInteger = Con . fromInteger
 
-example2 :: Num a => Ezpr a
-example2 =
-  Add
-    [Con 1, Add [Con 2] [Con 3]]
-    [Con 4, Add [Con 5] [Con 6]]
+instance (Eq a, Fractional a) => Fractional (Ezpr a) where
+  (/) = arithRight MUL
+  fromRational = Con . fromRational
 
-example3 :: Num a => Ezpr a
-example3 =
-  Mul
-    [Add [Con 3] [Con 4]]
-    [Mul [Con 5] [Con 6]]
+arithLeft :: (Eq a, Num a) => Op -> Ezpr a -> Ezpr a -> Ezpr a
+arithLeft o (Oper o1 (lt1, rt1)) (Oper o2 (lt2, rt2))
+  | o == o1
+    , o == o2 =
+    Oper o (lt1 ++ lt2, rt1 ++ rt2)
+arithLeft o (Oper o1 (lt1, rt1)) e2 | o == o1 = Oper o (e2 : lt1, rt1)
+arithLeft o e1 (Oper o2 (lt2, rt2)) | o == o2 = Oper o (e1 : lt2, rt2)
+arithLeft o e1 e2 = Oper o ([e1, e2], [])
+
+arithRight :: (Eq a, Num a) => Op -> Ezpr a -> Ezpr a -> Ezpr a
+arithRight o (Oper o1 (lt1, rt1)) (Oper o2 (lt2, rt2))
+  | o == o1
+    , o == o2 =
+    Oper o (lt1 ++ rt2, rt1 ++ lt2)
+arithRight o (Oper o1 (lt1, rt1)) e2 | o == o1 = Oper o (lt1, e2 : rt1)
+arithRight o e1 (Oper o2 (lt2, rt2)) | o == o2 = negate $ arithRight o (Oper o2 (lt2, rt2)) e1
+arithRight o e1 e2 = Oper o ([e1], [e2])
+
+addEzprs :: (Eq a, Num a) => Ezpr a -> Ezpr a -> Ezpr a
+addEzprs e (Con 0) = e
+addEzprs (Con 0) e = e
+Oper SUM (lt1, rt1) `addEzprs` Oper SUM (lt2, rt2) =
+  Oper SUM (lt1 ++ lt2, rt1 ++ rt2)
+Oper SUM (lt1, rt1) `addEzprs` e2 = Oper SUM (e2 : lt1, rt1)
+e1 `addEzprs` Oper SUM (lt2, rt2) = Oper SUM (e1 : lt2, rt2)
+e1 `addEzprs` e2 = Oper SUM ([e1, e2], [])
+
+subEzprs :: (Eq a, Num a) => Ezpr a -> Ezpr a -> Ezpr a
+subEzprs e (Con 0) = e
+subEzprs (Con 0) e = negate e
+Oper SUM (lt1, rt1) `subEzprs` Oper SUM (lt2, rt2) =
+  Oper SUM (lt1 ++ rt2, rt1 ++ lt2)
+Oper SUM (lt1, rt1) `subEzprs` e2 = Oper SUM (lt1, e2 : rt1)
+e1 `subEzprs` Oper SUM (lt2, rt2) = Oper SUM (lt2, e1 : rt2)
+e1 `subEzprs` e2 = Oper SUM ([e1], [e2])
+
+mulEzprs :: (Eq a, Num a) => Ezpr a -> Ezpr a -> Ezpr a
+mulEzprs (Con 0) _ = Con 0
+mulEzprs _ (Con 0) = Con 0
+mulEzprs (Con 1) e = e
+mulEzprs e (Con 1) = e
+mulEzprs (Con (-1)) e = negate e
+mulEzprs e (Con (-1)) = negate e
+Oper MUL (lt1, rt1) `mulEzprs` Oper MUL (lt2, rt2) =
+  Oper MUL (lt1 ++ lt2, rt1 ++ rt2)
+Oper MUL (lt1, rt1) `mulEzprs` e2 = Oper MUL (e2 : lt1, rt1)
+e1 `mulEzprs` Oper MUL (lt2, rt2) = Oper MUL (e1 : lt2, rt2)
+e1 `mulEzprs` e2 = Oper MUL ([e1, e2], [])
+
+divEzprs :: (Eq a, Num a) => Ezpr a -> Ezpr a -> Ezpr a
+divEzprs e (Con 1) = e
+divEzprs e (Con (-1)) = negate e
+Oper MUL (lt1, rt1) `divEzprs` Oper MUL (lt2, rt2) =
+  Oper MUL (lt1 ++ lt2, rt1 ++ rt2)
+Oper MUL (lt1, rt1) `divEzprs` e2 = Oper MUL (e2 : lt1, rt1)
+e1 `divEzprs` Oper MUL (lt2, rt2) = Oper MUL (e1 : lt2, rt2)
+e1 `divEzprs` e2 = Oper MUL ([e1, e2], [])
+
+example :: (Eq a, Num a) => Ezpr a
+example = (3 + 4) + (5 + 6)
+
+example2 :: (Eq a, Num a) => Ezpr a
+example2 = (1 + (2 + 3)) + (4 + (5 + 6))
+
+example3 :: Ezpr Int
+example3 = (3 + 4) * (5 + 6) :: Ezpr Int
+
+-- alex suggests for later:
+--  smart constructors with pattern synonyms
 
 {-
 liftNodes :: Ezpr a -> Ezpr a
