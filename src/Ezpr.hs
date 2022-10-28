@@ -10,33 +10,13 @@ data Op = SUM | MUL deriving (Eq, Show)
 
 data Ezpr a
   = Con a
-  | Oper Op (Bags a)
+  | Oper Op ([Ezpr a], [Ezpr a])
   deriving (Show)
-
--- Pattern guard
-isOp :: Op -> Ezpr a -> Bool
-isOp o = \case
-  (Oper o' _) | o == o' -> True
-  _ -> False
-
-type Bag a = [Ezpr a]
-type Bags a = (Bag a, Bag a)
 
 equalAsBags :: Eq a => [a] -> [a] -> Bool
 equalAsBags [] [] = True
 equalAsBags [] _ = False
 equalAsBags (a : as) bs = elem a bs && equalAsBags as (delete a bs)
-
-leftBag :: Ezpr a -> Bag a
-leftBag = fst . decompose
-
-rightBag :: Ezpr a -> Bag a
-rightBag = snd . decompose
-
-decompose :: Ezpr a -> Bags a
-decompose (Oper _ bags) = bags
--- maybe use ifcxt here : https://hackage.haskell.org/package/ifcxt
-decompose _ = error $ "Can't decompose Ezpr "
 
 separatorFor :: Op -> String
 separatorFor SUM = "-"
@@ -92,7 +72,7 @@ removeDups ((b : bs), b2) =
     then removeDups (bs, (delete b b2))
     else putback b $ removeDups (bs, b2)
  where
-  putback b (b1, b2) = (b : b1, b2)
+  putback c (c1, c2) = (c : c1, c2)
 
 arithLeft :: (Eq a, Num a) => Op -> Ezpr a -> Ezpr a -> Ezpr a
 arithLeft o (Oper o1 (lt1, rt1)) (Oper o2 (lt2, rt2))
@@ -154,41 +134,3 @@ Oper MUL (lt1, rt1) `divEzprs` Oper MUL (lt2, rt2) =
 Oper MUL (lt1, rt1) `divEzprs` e2 = mkOper MUL (e2 : lt1, rt1)
 e1 `divEzprs` Oper MUL (lt2, rt2) = mkOper MUL (e1 : lt2, rt2)
 e1 `divEzprs` e2 = mkOper MUL ([e1, e2], [])
-
-example :: (Eq a, Num a) => Ezpr a
-example = (3 + 4) + (5 + 6)
-
-example2 :: (Eq a, Num a) => Ezpr a
-example2 = (1 + (2 + 3)) + (4 + (5 + 6))
-
-example3 :: Ezpr Int
-example3 = (3 + 4) * (5 + 6) :: Ezpr Int
-
--- alex suggests for later:
---  smart constructors with pattern synonyms
-
-{-
-liftNodes :: Ezpr a -> Ezpr a
-liftNodes (Sum add sub) =
-  sum adds undefined
- where
-  adds = sequence $ map added addSum
-  -- addSum is the sum nodes in the addends of the current node
-  -- addSum' is the non-sum nodes
-  (addSum, addSum') = splitP isSum add
-  (subSum, subSum') = splitP isSum sub
-liftNodes x = x
- -}
-
--- SUM [ a b - c d ]     (a + b - c - d)
-
--- (1+2)+3   ->  SUM [ SUM [1 2 -] 3 - ]
---           ->  SUM [ 1 2 3 - ]
-
--- 1+(2+3)   ->  SUM [ 1 SUM [ 2 3 - ] - ]
---           ->  SUM [ 1 2 3 - ]
-
--- (1 - 2) - (3 - 4)
---   SUM [ SUM [ 1 - 2 ] - SUM [ 3 - 4 ] ]
---   SUM [ 1 - 2 SUM [ 3 - 4 ] ]      1 - 2 - (3-4)
---   SUM [ 1 4 - 2 3 ]                1 + 4 - 2 - 3
