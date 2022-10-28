@@ -74,9 +74,9 @@ instance (Eq a, Num a) => Num (Ezpr a) where
 
   fromInteger = Con . fromInteger
 
-instance (Eq a, Fractional a) => Fractional (Ezpr a) where
+instance (Eq a, Real a) => Fractional (Ezpr a) where
   (/) = divEzprs
-  fromRational = Con . fromRational
+  fromRational = undefined
 
 -- if the two bags (a, b) have any elements in common,
 -- remove the common elements from both

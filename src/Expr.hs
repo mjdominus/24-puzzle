@@ -31,9 +31,10 @@ instance Num a => Num (Expr a) where
     signum = undefined
     abs = undefined
 
-instance Fractional a => Fractional (Expr a) where
+instance Num a => Fractional (Expr a) where
     (/) = Expr D
-    fromRational = XCon . fromRational
+    fromRational = undefined
+
 -- can I use this for ExprToEzpr?
 evalExpr :: (Real a, Fractional b) => Expr a -> b
 evalExpr (XCon c) = fromRational $ toRational c
