@@ -22,16 +22,22 @@ separatorFor :: Op -> String
 separatorFor SUM = "-"
 separatorFor MUL = "÷"
 
-toStr :: Show a => Ezpr a -> String
-toStr = \case
+repr :: Show a => Ezpr a -> String
+repr = \case
   Con a -> show a
   Oper o (lt, rt) -> compound o lt (separatorFor o) rt
  where
   compound op lt sep rt =
     intercalate " " [show op, "[", lts, sep, rts, "]"]
    where
-    lts = intercalate " " $ map toStr lt
-    rts = intercalate " " $ map toStr rt
+    lts = intercalate " " $ map repr lt
+    rts = intercalate " " $ map repr rt
+{- 
+toStr :: Show a => Ezpr a -> String
+toStr = \case
+  Con a -> show a
+  Oper o (lt, rt) =
+    case length lt of 0 ->  -}
 
 instance Eq a => Eq (Ezpr a) where
   (==) (Con a) (Con b) = a == b
